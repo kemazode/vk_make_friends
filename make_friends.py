@@ -19,6 +19,9 @@ COMMANDS = {'next' : '/next',
             'exit' : '/exit'
             }
 
+#MESSAGE = '''Добавляйтесь в друзья!
+#Приму всех без исключений!
+#В подписчики не отправляю!'''
 MESSAGE = 'Ребят, добавляйтесь, приму всех инфа 100%)))'
 
 def vk_get_api():    
@@ -57,8 +60,8 @@ def vk_get_posts(api, group_id):
     
 def vk_spam(api, groups):   
     count = 0
-    continue_on = False
     for i in groups:                
+        continue_on = False
         count += 1
         print()
         print(colored(' %s/%s' % (count, len(groups)), 'grey', 'on_white'))
@@ -66,12 +69,17 @@ def vk_spam(api, groups):
         print(colored(' -> %s members\n' % i[2], 'white', attrs=['bold']))
         
         posts = vk_get_posts(api, i[0])
+        count_posts = 0
         for j in posts:
+            count_posts += 1
+            print(colored(' %s/%s' % (count_posts, len(posts)), 'grey', 'on_white'))
+            print(colored(' -> Post %s' % j, 'white', attrs=['bold']))
+        
             cmd = vk_handle_captcha(lambda key, sid: \
                 api.wall.createComment( \
                     owner_id=i[0], post_id=j, message=MESSAGE, \
                     captcha_sid=sid, captcha_key=key)['comment_id'], \
-                    'Comment %s is added')
+                    'Comment %s added')
             if cmd == COMMANDS['nextgroup']:
                 continue_on = True
                 break;
@@ -84,7 +92,7 @@ def vk_spam(api, groups):
                 api.wall.post( \
                     owner_id=i[0], message=MESSAGE, \
                     captcha_sid=sid, captcha_key=key)['post_id'], \
-                    'Post %s is created')
+                    'Post %s created')
 
 def vk_add_friends(api):
     requests = api.friends.getRequests()['items']
@@ -96,12 +104,12 @@ def vk_add_friends(api):
 
 def vk_handle_captcha(f, msg):
     key, sid = 0, 0
-    captcha_solved = False
-    while not captcha_solved:
+    while True:
         try:
             value = f(key, sid)
             time.sleep(REQUEST_DELAY)
             print(colored(msg % value, 'green', attrs=['bold']))
+            break
         except vk.exceptions.VkAPIError as e:
             print(colored('ERROR: %s' % e.message, 'white', 'on_red'))
             if e.is_captcha_needed():               
@@ -111,6 +119,7 @@ def vk_handle_captcha(f, msg):
                 elif key in COMMANDS.values():
                     return key
             else:
+                time.sleep(REQUEST_DELAY)
                 break
             time.sleep(REQUEST_DELAY)
         
