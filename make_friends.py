@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from termcolor import colored
+import argparse
 
 API_VERSION = '5.103'
 REQUEST_DELAY = 0.3
@@ -134,15 +135,16 @@ def solve_captcha(e):
     return key, e.captcha_sid
 
 if __name__ == '__main__':
-        
-    if len(sys.argv) > 1:
-        if sys.argv[1] == '--help':        
-            print(HELP_MESSAGE)
-            sys.exit(0)
-        elif sys.argv[1] == '--add':                   
-            api = vk_get_api()
-            vk_add_friends(api)
-            sys.exit(0)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-a', '--add', action='store_true', help='only accept friend requests')
+    parser.add_argument('-V', '--version', action='version', version='%(prog)s 0.1.0') 
+    args = parser.parse_args()
+    
+    if args.add:
+        api = vk_get_api()
+        vk_add_friends(api)
+        sys.exit(0)
                    
     api = vk_get_api()
     groups = vk_get_groups(api)
