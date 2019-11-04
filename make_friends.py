@@ -19,9 +19,12 @@ COMMANDS = {'next' : '/next',
             'exit' : '/exit'
             }
 
-#MESSAGE = '''Добавляйтесь в друзья!
-#Приму всех без исключений!
-#В подписчики не отправляю!'''
+HELP_MESSAGE ='''Usage: ./make_friends.py [OPTIONS]
+
+  --add		Only accept all requests to friends
+  --help	Print this message
+'''
+
 MESSAGE = 'Ребят, добавляйтесь, приму всех инфа 100%)))'
 
 def vk_get_api():    
@@ -131,6 +134,16 @@ def solve_captcha(e):
     return key, e.captcha_sid
 
 if __name__ == '__main__':
+        
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--help':        
+            print(HELP_MESSAGE)
+            sys.exit(0)
+        elif sys.argv[1] == '--add':                   
+            api = vk_get_api()
+            vk_add_friends(api)
+            sys.exit(0)
+                   
     api = vk_get_api()
     groups = vk_get_groups(api)
     while True:
