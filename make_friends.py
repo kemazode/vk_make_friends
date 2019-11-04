@@ -45,10 +45,12 @@ def vk_get_groups(api, keyword, group_count):
     groups = api.groups.search(q=keyword, count=group_count)['items']
     time.sleep(REQUEST_DELAY)
     
-    print(colored('Received %s groups on request "%s"' % (len(groups), keyword), 'yellow', attrs=['bold']))
+    print(colored('Received %s groups on request "%s"' % (len(groups) if groups else 0, keyword), 'yellow', attrs=['bold']))
     print(colored('Removing private groups...', 'yellow', attrs=['bold']))
     ids = [i['id'] for i in groups]
-    
+    if not ids:
+        print(colored('No groups found', 'yellow', attrs=['bold']))
+        return
     groups = api.groups.getById(group_ids=ids, fields='can_post,members_count')    
     time.sleep(REQUEST_DELAY)
     
@@ -139,9 +141,9 @@ def solve_captcha(e):
     proc.terminate()
     return key, e.captcha_sid
 
-def print_groups(groups):
+def print_groups(groups):    
     table = [('n', 'name', 'id', 'members')]
-    for i in range(len(groups)):
+    for i in range(len(groups) if groups else 0):
         table.append((
             colored('%s' % (i+1), 'white', attrs=['bold']),
             colored(groups[i][3], 'green', attrs=['bold']),
@@ -160,6 +162,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--group-count', default=GROUP_COUNT, dest='GROUP_COUNT', type=int, help='set maximum number of groups')
     parser.add_argument('-p', '--post-count', default=POST_COUNT, dest='POST_COUNT', type=int, help='set number of posts for commenting in one group')
     args = parser.parse_args()
+    
     api = vk_get_api()
     
     if args.add:
@@ -168,6 +171,8 @@ if __name__ == '__main__':
         print_groups(vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT))
     else:
         groups = vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT)
+        if not groups:
+            sys.exit(0)
         while True:
             vk_spam(api, groups, args.POST_COUNT)
             vk_add_friends(api)
