@@ -7,11 +7,15 @@ import sys
 import time
 from termcolor import colored
 import argparse
+from terminaltables import SingleTable as T
 
+# not mutable by arguments
 API_VERSION = '5.103'
 REQUEST_DELAY = 0.3
 TOKEN_FILE = 'token.txt'
-POSTS_COUNT = 10
+
+# mutable by arguments
+POST_COUNT = 10
 KEYWORD = 'добавь'
 GROUP_COUNT = 50
 
@@ -37,23 +41,24 @@ def vk_get_api():
     session = vk.Session(access_token=token);
     return vk.API(session, v=API_VERSION)
 
-def vk_get_groups(api):
-    groups = api.groups.search(q=KEYWORD, count=GROUP_COUNT)['items']
+def vk_get_groups(api, keyword, group_count):
+    groups = api.groups.search(q=keyword, count=group_count)['items']
     time.sleep(REQUEST_DELAY)
     
-    print(colored('Received %s groups on request "%s"' % (len(groups), KEYWORD), 'yellow', attrs=['bold']))
+    print(colored('Received %s groups on request "%s"' % (len(groups), keyword), 'yellow', attrs=['bold']))
     print(colored('Removing private groups...', 'yellow', attrs=['bold']))
     ids = [i['id'] for i in groups]
     
     groups = api.groups.getById(group_ids=ids, fields='can_post,members_count')    
     time.sleep(REQUEST_DELAY)
     
-    groups = [(-i['id'], i['can_post'], i['members_count']) for i in groups if not i['is_closed']]
+    # two items are required by algorithm, others are optional
+    groups = [(-i.get('id'), i.get('can_post'), i.get('members_count'), i.get('name')) for i in groups if not i['is_closed']]
     print(colored('Groups left: %s' % len(groups), 'yellow', attrs=['bold']))
     return groups
 
-def vk_get_posts(api, group_id):
-    posts = api.wall.get(owner_id=group_id, count=POSTS_COUNT)['items']
+def vk_get_posts(api, group_id, post_count):
+    posts = api.wall.get(owner_id=group_id, count=post_count)['items']
     time.sleep(REQUEST_DELAY)
     
     print(colored('%s posts founded in group %s' % (len(posts), -group_id), 'yellow', attrs=['bold']))
@@ -62,7 +67,7 @@ def vk_get_posts(api, group_id):
     print(colored('Posts left: %s' % len(posts), 'yellow', attrs=['bold']))
     return posts
     
-def vk_spam(api, groups):   
+def vk_spam(api, groups, post_count):   
     count = 0
     for i in groups:                
         continue_on = False
@@ -72,7 +77,7 @@ def vk_spam(api, groups):
         print(colored(' -> Group %s' % -i[0], 'white', attrs=['bold']))
         print(colored(' -> %s members\n' % i[2], 'white', attrs=['bold']))
         
-        posts = vk_get_posts(api, i[0])
+        posts = vk_get_posts(api, i[0], post_count)
         count_posts = 0
         for j in posts:
             count_posts += 1
@@ -134,20 +139,35 @@ def solve_captcha(e):
     proc.terminate()
     return key, e.captcha_sid
 
+def print_groups(groups):
+    table = [('n', 'name', 'id', 'members')]
+    for i in range(len(groups)):
+        table.append((
+            colored('%s' % (i+1), 'white', attrs=['bold']),
+            colored(groups[i][3], 'green', attrs=['bold']),
+            colored('%s' % -groups[i][0], 'white', attrs=['bold']),
+            colored('%s' % groups[i][2], 'white', attrs=['bold'])))
+    print(T(table).table)
+        
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--add', action='store_true', help='only accept friend requests')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s 0.1.0') 
+    parser.add_argument('-l', '--list-groups', action='store_true', help='print list of groups found')
+    parser.add_argument('-k', '--keyword', default=KEYWORD, dest='KEYWORD', help='set keyword for searching groups')
+    parser.add_argument('-m', '--message', default=MESSAGE, dest='MESSAGE', help='set default message to post and comment')
+    parser.add_argument('-g', '--group-count', default=GROUP_COUNT, dest='GROUP_COUNT', type=int, help='set maximum number of groups')
+    parser.add_argument('-p', '--post-count', default=POST_COUNT, dest='POST_COUNT', type=int, help='set number of posts for commenting in one group')
     args = parser.parse_args()
+    api = vk_get_api()
     
     if args.add:
-        api = vk_get_api()
         vk_add_friends(api)
-        sys.exit(0)
-                   
-    api = vk_get_api()
-    groups = vk_get_groups(api)
-    while True:
-        vk_spam(api, groups)
-        vk_add_friends(api)
+    elif args.list_groups:
+        print_groups(vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT))
+    else:
+        groups = vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT)
+        while True:
+            vk_spam(api, groups, args.POST_COUNT)
+            vk_add_friends(api)
