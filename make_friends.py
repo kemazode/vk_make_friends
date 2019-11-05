@@ -69,7 +69,7 @@ def vk_get_posts(api, group_id, post_count):
     print(colored('Posts left: %s' % len(posts), 'yellow', attrs=['bold']))
     return posts
     
-def vk_spam(api, groups, post_count):   
+def vk_spam(api, groups, post_count, msg):   
     count = 0
     for i in groups:                
         continue_on = False
@@ -88,7 +88,7 @@ def vk_spam(api, groups, post_count):
         
             cmd = vk_handle_captcha(lambda key, sid: \
                 api.wall.createComment( \
-                    owner_id=i[0], post_id=j, message=MESSAGE, \
+                    owner_id=i[0], post_id=j, message=msg, \
                     captcha_sid=sid, captcha_key=key)['comment_id'], \
                     'Comment %s added')
             if cmd == COMMANDS['nextgroup']:
@@ -101,7 +101,7 @@ def vk_spam(api, groups, post_count):
         if i[1]: # can post
             vk_handle_captcha(lambda key, sid: \
                 api.wall.post( \
-                    owner_id=i[0], message=MESSAGE, \
+                    owner_id=i[0], message=msg, \
                     captcha_sid=sid, captcha_key=key)['post_id'], \
                     'Post %s created')
 
@@ -174,5 +174,5 @@ if __name__ == '__main__':
         if not groups:
             sys.exit(0)
         while True:
-            vk_spam(api, groups, args.POST_COUNT)
+            vk_spam(api, groups, args.POST_COUNT, args.MESSAGE)
             vk_add_friends(api)
