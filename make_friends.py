@@ -21,7 +21,6 @@ GROUP_COUNT = 50
 OFFSET = 0
 
 COMMANDS = {'next' : '/next', 
-            'nextgroup' : '/nextgroup',
             'exit' : '/exit'
             }
 
@@ -56,20 +55,20 @@ def vk_get_groups(api, keyword, group_count, offset):
     time.sleep(REQUEST_DELAY)
     
     # two items are required by algorithm, others are optional
-    groups = [(-i.get('id'), i.get('can_post'), i.get('members_count'), i.get('name')) for i in groups if not i['is_closed']]
+    groups = [(-i.get('id'), i.get('can_post'), i.get('members_count'), i.get('name'), 'https://vk.com/' + i.get('screen_name')) for i in groups if not i['is_closed']]
     print(colored('Groups left: %s' % len(groups), 'yellow', attrs=['bold']))
     return groups
 
-def vk_get_posts(api, group_id, post_count):
+def vk_get_posts(api, group, post_count):
     if not post_count:
         return None
         
-    posts = api.wall.get(owner_id=group_id, count=post_count)['items']
+    posts = api.wall.get(owner_id=group[0], count=post_count)['items']
     time.sleep(REQUEST_DELAY)
     
-    print(colored('%s posts founded in group %s' % (len(posts), -group_id), 'yellow', attrs=['bold']))
+    print(colored('%s posts founded in group %s' % (len(posts), group[4]), 'yellow', attrs=['bold']))
     print(colored('Removing posts that prohibits commenting...', 'yellow', attrs=['bold']))
-    posts = [i['id'] for i in posts if i['comments']['can_post']]
+    posts = [(i['id'], '%s?w=wall%s_%s' % (group[4], group[0], i['id'])) for i in posts if i['comments']['can_post']]
     print(colored('Posts left: %s' % len(posts), 'yellow', attrs=['bold']))
     return posts
     
@@ -80,23 +79,23 @@ def vk_spam(api, groups, post_count, msg):
         count += 1
         print()
         print(colored(' %s/%s' % (count, len(groups)), 'grey', 'on_white'))
-        print(colored(' -> Group %s' % -i[0], 'white', attrs=['bold']))
+        print(colored(' -> Group %s' % i[4], 'white', attrs=['bold']))
         print(colored(' -> %s members\n' % i[2], 'white', attrs=['bold']))
         
-        posts = vk_get_posts(api, i[0], post_count)
+        posts = vk_get_posts(api, i, post_count)
         if posts:            
             count_posts = 0
             for j in posts:
                 count_posts += 1
                 print(colored(' %s/%s' % (count_posts, len(posts)), 'grey', 'on_white'))
-                print(colored(' -> Post %s' % j, 'white', attrs=['bold']))
+                print(colored(' -> Post %s' % j[1], 'white', attrs=['bold']))
         
                 cmd = vk_handle_captcha(lambda key, sid: \
                     api.wall.createComment( \
-                        owner_id=i[0], post_id=j, message=msg, \
+                        owner_id=i[0], post_id=j[0], message=msg, \
                         captcha_sid=sid, captcha_key=key)['comment_id'], \
-                        'Comment %s added')
-                if cmd == COMMANDS['nextgroup']:
+                        (' -> Comment %s_r' % j[1]) + '%s created')
+                if cmd == COMMANDS['next']:
                     continue_on = True
                     break;
                    
@@ -108,7 +107,7 @@ def vk_spam(api, groups, post_count, msg):
                 api.wall.post( \
                     owner_id=i[0], message=msg, \
                     captcha_sid=sid, captcha_key=key)['post_id'], \
-                    'Post %s created')
+                    (' -> Post %s?w=wall%s_' % (i[4], i[0])) + '%s created')
 
 def vk_add_friends(api):
     requests = api.friends.getRequests()['items']
@@ -116,7 +115,7 @@ def vk_add_friends(api):
     for i in requests:
         api.friends.add(user_id=i)        
         time.sleep(REQUEST_DELAY)
-        print(colored('Friend %s added' % i, 'yellow', attrs=['bold']))
+        print(colored('Friend https://vk.com/id%s added' % i, 'yellow', attrs=['bold']))
 
 def vk_handle_captcha(f, msg):
     key, sid = 0, 0
@@ -139,14 +138,14 @@ def vk_handle_captcha(f, msg):
                     continue
                 else:
                     if handle_captcha_command(again):
-                        return key                
+                        return again
                     break
             time.sleep(REQUEST_DELAY)
 
 def handle_captcha_command(cmd):
     if cmd == COMMANDS['exit']:
         sys.exit(0)
-    elif cmd == COMMANDS['next'] or cmd == COMMANDS['nextgroup']:
+    elif cmd == COMMANDS['next']:
         return cmd
         
 def solve_captcha(e):
