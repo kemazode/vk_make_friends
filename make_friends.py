@@ -18,6 +18,7 @@ TOKEN_FILE = 'token.txt'
 POST_COUNT = 10
 KEYWORD = 'добавь'
 GROUP_COUNT = 50
+OFFSET = 0
 
 COMMANDS = {'next' : '/next', 
             'nextgroup' : '/nextgroup',
@@ -41,8 +42,8 @@ def vk_get_api():
     session = vk.Session(access_token=token);
     return vk.API(session, v=API_VERSION)
 
-def vk_get_groups(api, keyword, group_count):
-    groups = api.groups.search(q=keyword, count=group_count)['items']
+def vk_get_groups(api, keyword, group_count, offset):
+    groups = api.groups.search(q=keyword, count=group_count, offset=offset)['items']
     time.sleep(REQUEST_DELAY)
     
     print(colored('Received %s groups on request "%s"' % (len(groups) if groups else 0, keyword), 'yellow', attrs=['bold']))
@@ -60,6 +61,9 @@ def vk_get_groups(api, keyword, group_count):
     return groups
 
 def vk_get_posts(api, group_id, post_count):
+    if not post_count:
+        return None
+        
     posts = api.wall.get(owner_id=group_id, count=post_count)['items']
     time.sleep(REQUEST_DELAY)
     
@@ -80,20 +84,21 @@ def vk_spam(api, groups, post_count, msg):
         print(colored(' -> %s members\n' % i[2], 'white', attrs=['bold']))
         
         posts = vk_get_posts(api, i[0], post_count)
-        count_posts = 0
-        for j in posts:
-            count_posts += 1
-            print(colored(' %s/%s' % (count_posts, len(posts)), 'grey', 'on_white'))
-            print(colored(' -> Post %s' % j, 'white', attrs=['bold']))
+        if posts:            
+            count_posts = 0
+            for j in posts:
+                count_posts += 1
+                print(colored(' %s/%s' % (count_posts, len(posts)), 'grey', 'on_white'))
+                print(colored(' -> Post %s' % j, 'white', attrs=['bold']))
         
-            cmd = vk_handle_captcha(lambda key, sid: \
-                api.wall.createComment( \
-                    owner_id=i[0], post_id=j, message=msg, \
-                    captcha_sid=sid, captcha_key=key)['comment_id'], \
-                    'Comment %s added')
-            if cmd == COMMANDS['nextgroup']:
-                continue_on = True
-                break;
+                cmd = vk_handle_captcha(lambda key, sid: \
+                    api.wall.createComment( \
+                        owner_id=i[0], post_id=j, message=msg, \
+                        captcha_sid=sid, captcha_key=key)['comment_id'], \
+                        'Comment %s added')
+                if cmd == COMMANDS['nextgroup']:
+                    continue_on = True
+                    break;
                    
         if continue_on:
             continue
@@ -125,14 +130,24 @@ def vk_handle_captcha(f, msg):
             print(colored('ERROR: %s' % e.message, 'white', 'on_red'))
             if e.is_captcha_needed():               
                 key, sid = solve_captcha(e)
-                if key == COMMANDS['exit']:
-                    sys.exit(0)
-                elif key in COMMANDS.values():
+                if handle_captcha_command(key):
                     return key
             else:
                 time.sleep(REQUEST_DELAY)
-                break
+                again = input('Try again? [Y/n] ')
+                if again.lower() == 'y':
+                    continue
+                else:
+                    if handle_captcha_command(again):
+                        return key                
+                    break
             time.sleep(REQUEST_DELAY)
+
+def handle_captcha_command(cmd):
+    if cmd == COMMANDS['exit']:
+        sys.exit(0)
+    elif cmd == COMMANDS['next'] or cmd == COMMANDS['nextgroup']:
+        return cmd
         
 def solve_captcha(e):
     print(colored('Captcha image: %s' % e.captcha_img, 'red', attrs=['bold']))
@@ -159,8 +174,9 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--list-groups', action='store_true', help='print list of groups found')
     parser.add_argument('-k', '--keyword', default=KEYWORD, dest='KEYWORD', help='set keyword for searching groups')
     parser.add_argument('-m', '--message', default=MESSAGE, dest='MESSAGE', help='set default message to post and comment')
-    parser.add_argument('-g', '--group-count', default=GROUP_COUNT, dest='GROUP_COUNT', type=int, help='set maximum number of groups')
+    parser.add_argument('-g', '--group-count', default=GROUP_COUNT, dest='GROUP_COUNT', type=int, help='set maximum number of groups')    
     parser.add_argument('-p', '--post-count', default=POST_COUNT, dest='POST_COUNT', type=int, help='set number of posts for commenting in one group')
+    parser.add_argument('-o', '--offset', default=OFFSET, dest='OFFSET', type=int, help='set offset of group list')
     args = parser.parse_args()
     
     api = vk_get_api()
@@ -168,9 +184,9 @@ if __name__ == '__main__':
     if args.add:
         vk_add_friends(api)
     elif args.list_groups:
-        print_groups(vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT))
+        print_groups(vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT, args.OFFSET))
     else:
-        groups = vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT)
+        groups = vk_get_groups(api, args.KEYWORD, args.GROUP_COUNT, args.OFFSET)
         if not groups:
             sys.exit(0)
         while True:
